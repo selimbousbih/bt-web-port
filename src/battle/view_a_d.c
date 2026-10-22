@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "battle/view_a.h"
 #include "battle/orbit_cam.h"
@@ -87,15 +88,15 @@ ChrView *gChrView = NULL;
 /* File id of a character's model: costume n, or its damaged version. */
 s32 ChrView_GetModelFile(s32 chara, s32 costume, s32 damaged) {
     if (damaged != 0) {
-        return chara * 10 + costume + (CHRVIEW_FILE_FIRST + 4);
+        return PortDlc_Model(chara, costume, 1);
     }
-    return chara * 10 + costume + CHRVIEW_FILE_FIRST;
+    return PortDlc_Model(chara, costume, 0);
 }
 
 /* The character's entry in the table of common file 4, NULL for an id that is not a character. */
 ChrViewInfo *ChrView_GetCharaInfo(u32 chara) {
     ChrViewInfo *table = PACK_AT(gCommonRes->data[2], 1);
-    if (chara >= CHRVIEW_CHARA_COUNT) {
+    if (chara >= CHRVIEW_CHARA_COUNT && !PortDlc_IsCharacter(chara)) {
         return NULL;
     }
     return &table[chara];

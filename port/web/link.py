@@ -40,7 +40,9 @@ TARGET_SRC["webasync"] = TARGET_SRC["web"]
 def link(target, objs, extra):
     OUT.mkdir(parents=True, exist_ok=True)
     out = OUT / OUTNAME[target]
-    cmd = ["emcc"] + objs + extra + COMMON + TARGETS[target] + ["-o", str(out)]
+    # ImGui and the SDL overlay contain C++ local statics. Link the C++ runtime so
+    # their initialization guards resolve to real functions rather than trap stubs.
+    cmd = ["em++"] + objs + extra + COMMON + TARGETS[target] + ["-o", str(out)]
     return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT), out
 
 
@@ -64,7 +66,8 @@ def main():
     subprocess.run(["emcc", "-c", "-O2", str(stubs), "-o", str(so)], check=True)
     r, out = link(target, objs + [str(so)], [])
     if target != "node":
-        (OUT / "index.html").write_text((WEB / "shell.html").read_text())
+        (OUT / "index.html").write_text((WEB / "player.html").read_text())
+        (OUT / "game.html").write_text((WEB / "shell.html").read_text())
         for f in ("net.js", "net.css"):  # online play's screens and connection (Dragon Net Battle)
             shutil.copy(WEB / f, OUT / f)
         subprocess.run([sys.executable, str(WEB / "make_icons.py")], check=True)

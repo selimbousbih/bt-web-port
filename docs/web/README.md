@@ -72,6 +72,32 @@ share the link only with people who own the game.
 
 ## Testing
 
+### Z-counter coach
+
+The Video settings (F1) include **Z-counter training hints**, enabled by default. For a single launch,
+`?env=BT3_COUNTER_HINT=1` enables it and `?env=BT3_COUNTER_HINT=0` hides it. The saved setting is `counter_hint`.
+Human-controlled fighters get a small cue under their health bar:
+
+- **GET READY**: a nearby opponent's first animation hit is due within six combat updates (about 200 ms).
+- **COUNTER NOW**: that hit-start event is estimated on the next update. Flick Up and tap Square together.
+- **INPUT ACTIVE**: the game's one-update counter timer is open after a valid input.
+- **Z-COUNTER!**: the game confirmed the counter; the confirmation remains visible for 650 ms.
+- **TOO EARLY / TOO LATE**: a counter attempt before / after the estimated first-hit update. The message stays
+  visible for **two real seconds**, unless a newer attempt or a confirmed success replaces it.
+- **PRESS TOGETHER**: one input was already held; flick Up and tap Square together. **NOT READY** means the
+  counter's retry cooldown prevented arming it. These also remain visible for two seconds.
+- **COUNTER MISSED**: input arrived on the estimated update but no counter was confirmed; animation timing
+  alone cannot explain this miss. Ordinary attacks and movement do not produce failure messages.
+
+The countdown predicts **animation hit activation**, not exact hitbox contact. Range is estimated from model
+size; movement, cancelled attacks, delayed contact and animation speed changes can make a cue early or make
+the attack miss. Only the first hit is forecast, matching the counter branch's hit-index restriction. Pauses,
+loading, cutscenes, CPU fighters and hit-stop suppress the forecast. Rendering interpolation does not advance
+the countdown. This overlay reads game state and does not widen the counter window or press buttons.
+
+Regression checks: `cc -std=c11 -Iinclude -Iport/include -Iport/src port/tests/counter_hint.c -o /tmp/bt3-counter-hint`
+then `/tmp/bt3-counter-hint`.
+
 - `node port/web/serve.mjs ...` with `?hud=1` shows frames per second and how busy the program is; with
   `?telemetry=1` the page reports both to the server (`port/build/telemetry.log`, read with
   `python3 port/web/telemetry.py`).
@@ -84,7 +110,8 @@ share the link only with people who own the game.
 | Path | Contents |
 |---|---|
 | `port/web/build.py`, `irweb.py`, `link.py` | The build: compile, rewrite the IR (soft float, fixed PS2 address layout), link both targets |
-| `port/web/shell.html` | The page: loading, the disc reader, touch controls, sound, saves |
+| `port/web/player.html` | Framed player and fullscreen controls (`index.html` in the build) |
+| `port/web/shell.html` | The game runtime (`game.html` in the build): loading, the disc reader, touch controls, sound, saves |
 | `port/web/net.js`, `net.css` | Online play: the lobby screens, rooms, Quick Match, the WebRTC link |
 | `port/web/src/`, `target/`, `include/` | The browser side of the port: touch input, waits, files from the disc |
 | `port/web/serve.mjs` | The local test server |

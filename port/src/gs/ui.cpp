@@ -11,9 +11,12 @@
 #include "imgui_impl_opengl3.h"
 #include "ui.h"
 #include "namefont.h"
+#include "counter_hint.h"
 
 static int sMeter = -1; // the meter (frame rate, connection): -1 not read yet
 static bool meter_on(void);
+static int sCounterHint = -1;
+static bool counter_hint_on(void);
 static int sGL; // 1: the OpenGL back end draws the window (ImGui's OpenGL3 backend, no SDL GPU device)
 
 extern "C" {
@@ -54,6 +57,14 @@ static bool sNet;                              // the open window is the online 
 static int sForceTab = -1;                     // BT3_UI_OPEN=<tab>: open at start on that tab (testing)
 static int sCapKind, sCapPlayer, sCapAction;   // waiting for a key (1) or a controller button (2) to bind
 static SDL_GPUDevice *sDevice;
+
+static bool counter_hint_on(void) {
+    if (sCounterHint < 0) {
+        const char *env = getenv("BT3_COUNTER_HINT");
+        sCounterHint = env != NULL ? atoi(env) != 0 : Port_Setting("counter_hint", 1) != 0;
+    }
+    return sCounterHint != 0;
+}
 
 /* Name strips (gamedata/stages/names.rgba and gamedata/songs/names.rgba): the names of the stages and tracks added
    from outside the disc, drawn by the port over the menu in the game's own lettering. Raw RGBA, a 12-byte header
@@ -607,6 +618,17 @@ static void video_tab(PortVideo &v) {
             Port_SettingsWrite();
         }
     }
+    {
+        bool on = counter_hint_on();
+        if (ImGui::Checkbox("Z-counter training hints", &on)) {
+            sCounterHint = on;
+            Port_SettingSave("counter_hint", sCounterHint);
+            Port_SettingsWrite();
+        }
+        ImGui::SetItemTooltip("Warns before a nearby opponent's first animation hit, then cues Up + Square.\n"
+                              "Estimated timing: movement and hitbox contact can change the actual impact.\n"
+                              "Green confirms a successful Z-counter. Combat timing stays the same.");
+    }
     ImGui::Spacing();
     if (v.texPackCount > 0) {
         bool on = v.texPack != 0;
@@ -947,6 +969,68 @@ static void font_draw(ImDrawList *dl, const FontName *n, float x, float y, float
 
 // Builds this frame's picture of the overlay (the settings or the online window, the line over the picture).
 // false: there is nothing to draw. The same for both back ends; each then draws ImGui's data its own way.
+// The coach uses a game-thread snapshot, so interpolated pictures cannot advance its countdown or invent hits.
+static CounterHintPlayer sCounterPlayers[2];
+static CounterHintFeedback sCounterFeedback[2];
+static int sCounterResult[2];
+
+static bool counter_hint_update(void) {
+    Port_CounterHintRead(sCounterPlayers);
+    bool enabled = counter_hint_on(), show = false;
+    Uint64 now = SDL_GetTicks();
+    for (int p = 0; p < 2; p++) {
+        const CounterHintPlayer &h = sCounterPlayers[p];
+        sCounterResult[p] = CounterHint_FeedbackUpdate(&sCounterFeedback[p], &h, enabled, now);
+        show |= enabled && h.visible && (h.leadTicks > 0 || h.inputActive || sCounterResult[p]);
+    }
+    return show;
+}
+
+static void counter_hint_draw(float x, float y, float w, float h) {
+    ImDrawList *dl = ImGui::GetBackgroundDrawList();
+    ImFont *font = ImGui::GetFont();
+    float scale = w / 512.0f;
+    if (h / 448.0f < scale) { scale = h / 448.0f; }
+    for (int p = 0; p < 2; p++) {
+        const CounterHintPlayer &hint = sCounterPlayers[p];
+        int result = sCounterResult[p];
+        bool success = result == COUNTER_RESULT_SUCCESS;
+        bool failed = result != COUNTER_RESULT_NONE && !success;
+        if (!hint.visible || (!result && !hint.leadTicks && !hint.inputActive)) { continue; }
+        bool due = hint.leadTicks == 1;
+        ImU32 color = success ? IM_COL32(99, 240, 151, 255) : failed ? IM_COL32(255, 139, 123, 255) : due ? IM_COL32(255, 229, 120, 255) :
+                              hint.inputActive ? IM_COL32(115, 203, 255, 255) : IM_COL32(245, 183, 92, 255);
+        int place = p ^ Port_HudSwap();
+        float cw = 208.0f * scale, ch = 56.0f * scale;
+        float cx = place == 0 ? x + 16.0f * scale : x + w - cw - 16.0f * scale;
+        float cy = y + 85.0f * h / 448.0f;
+        dl->AddRectFilled(ImVec2(cx, cy), ImVec2(cx + cw, cy + ch), IM_COL32(9, 17, 29, 225), 6.0f * scale);
+        dl->AddRect(ImVec2(cx, cy), ImVec2(cx + cw, cy + ch), color, 6.0f * scale, 0, 1.5f * scale);
+        const char *title = success ? "Z-COUNTER!" : due ? "COUNTER NOW" : hint.inputActive ? "INPUT ACTIVE" : "GET READY";
+        if (failed) {
+            title = result == COUNTER_RESULT_EARLY ? "TOO EARLY" : result == COUNTER_RESULT_LATE ? "TOO LATE" :
+                    result == COUNTER_RESULT_TOGETHER ? "PRESS TOGETHER" :
+                    result == COUNTER_RESULT_NOT_READY ? "NOT READY" : "COUNTER MISSED";
+        }
+        char detail[96];
+        if (success) { snprintf(detail, sizeof(detail), "P%d  |  Successful counter", p + 1); }
+        else if (failed) {
+            const char *reason = result == COUNTER_RESULT_EARLY || result == COUNTER_RESULT_LATE ? "Timing estimate" :
+                                 result == COUNTER_RESULT_TOGETHER ? "New UP + SQUARE together" :
+                                 result == COUNTER_RESULT_NOT_READY ? "Counter retry cooldown" : "No confirmed counter";
+            snprintf(detail, sizeof(detail), "P%d | %s", p + 1, reason);
+        }
+        else if (due) { snprintf(detail, sizeof(detail), "P%d | UP + SQUARE (estimated)", p + 1); }
+        else if (hint.inputActive) { snprintf(detail, sizeof(detail), "P%d  |  Counter input registered", p + 1); }
+        else { snprintf(detail, sizeof(detail), "P%d  |  Estimated hit in %d ms", p + 1, (int)(hint.leadTicks * 33.3667f + 0.5f)); }
+        dl->AddText(font, 17.0f * scale, ImVec2(cx + 10.0f * scale, cy + 7.0f * scale), color, title);
+        dl->AddText(font, 11.0f * scale, ImVec2(cx + 10.0f * scale, cy + 29.0f * scale), IM_COL32(237, 241, 246, 255), detail);
+        float progress = result || due || hint.inputActive ? 1.0f : (float)(COUNTER_HINT_LEAD_TICKS + 1 - hint.leadTicks) / COUNTER_HINT_LEAD_TICKS;
+        dl->AddRectFilled(ImVec2(cx + 10.0f * scale, cy + 45.0f * scale), ImVec2(cx + cw - 10.0f * scale, cy + 48.0f * scale), IM_COL32(65, 73, 87, 255));
+        dl->AddRectFilled(ImVec2(cx + 10.0f * scale, cy + 45.0f * scale), ImVec2(cx + (10.0f + 188.0f * progress) * scale, cy + 48.0f * scale), color);
+    }
+}
+
 static bool frame_build(void) {
     if (sReady && gPortNetWindowClose) { // back from an online session: the window it was started from closes
         gPortNetWindowClose = 0;
@@ -971,11 +1055,12 @@ static bool frame_build(void) {
     bool songOn = gUiSongReady != 0 && gUiSongIdx >= 0 && gUiSongIdx < PortSongs_Count(); // (the same for an added song)
     bool overlay = nameOn || songOn;
     bool meter = sReady && meter_on();
+    bool counter = sReady && counter_hint_update();
     // the players' names under the gauges of an online fight
     bool names = sReady && Port_NetActive() && BtlChar_FindByObjId(0) != NULL && (Port_NetName(0)[0] != '\0' || Port_NetName(1)[0] != '\0');
     meter_count();
     sBuilt = false;
-    if (!sReady || (!sOpen && !notice && !overlay && !meter && !names)) {
+    if (!sReady || (!sOpen && !notice && !overlay && !meter && !names && !counter)) {
         return false;
     }
     sBuilt = true;
@@ -1007,6 +1092,9 @@ static bool frame_build(void) {
         gPY = (float)gUiPresentY / fy;
         gPW = (float)gUiPresentW / fx;
         gPH = (float)gUiPresentH / fy;
+    }
+    if (counter && !sOpen && gPW > 0.0f && gPH > 0.0f) {
+        counter_hint_draw(gPX, gPY, gPW, gPH);
     }
     if (names && gUiPresentW > 0 && gUiPresentH > 0) {
         // Under each side's health bar (the game's 512 x 448 page: the bars end at about y 50). The left place is

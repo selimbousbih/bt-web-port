@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Tenkaichi 3 — Super Roster</title>
+<style>
+  :root { color-scheme: dark; font: 15px/1.5 system-ui, -apple-system, sans-serif; color: #e8e8ea; background: #0b0c10; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { width: min(1120px, 100%); margin: auto; padding: 28px 24px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  h1 { font-size: clamp(20px, 3vw, 28px); margin: 0; letter-spacing: -.03em; }
+  .edition { color: #f2a33a; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .hint, footer { color: #9a9ca6; font-size: 13px; }
+  .player { border: 1px solid #333743; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 20px 60px #0006; }
+  #screen { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100svh - 220px); min-height: 240px; background: #000; }
+  iframe { display: block; width: 100%; height: 100%; border: 0; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; background: #15171e; border-top: 1px solid #2a2d38; }
+  button { cursor: pointer; border: 1px solid #49402f; border-radius: 8px; padding: 10px 16px; background: #f2a33a; color: #1a1204; font: 650 14px system-ui, sans-serif; }
+  .view-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  #cinematic { background: #262a35; color: #e8e8ea; border-color: #494d59; }
+  button:hover { filter: brightness(1.1); }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  #exit { display: none; position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 10; padding: 8px 12px; background: #15171ee6; color: #fff; border-color: #606575; }
+  #screen:fullscreen { width: 100%; height: 100%; max-height: none; min-height: 0; aspect-ratio: auto; }
+  #screen:-webkit-full-screen { width: 100%; height: 100%; max-height: none; min-height: 0; }
+  #screen.expanded { position: fixed; inset: 0; width: 100%; height: 100dvh; max-height: none; min-height: 0; aspect-ratio: auto; z-index: 100; }
+  #screen:fullscreen #exit { display: block; }
+  #screen:-webkit-full-screen #exit { display: block; }
+  #screen.expanded #exit { display: block; }
+  body.expanded { overflow: hidden; }
+  footer { margin-top: 16px; }
+  #message { color: #ffb4a8; margin: 8px 0 0; }
+  #message:empty { display: none; }
+  @media (max-width: 600px) {
+    main { padding: 16px 10px; }
+    header .hint { display: none; }
+    .toolbar { padding: 10px; flex-wrap: wrap; }
+    .toolbar .hint { max-width: 48%; }
+  }
+  /* Give the runtime room for its portrait touch controller below the picture. */
+  @media (pointer: coarse) and (orientation: portrait) { #screen { aspect-ratio: 3 / 5; max-height: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header><div><div class="edition">Super Roster</div><h1>Budokai Tenkaichi 3</h1></div><span class="hint">Keyboard &amp; controller</span></header>
+  <section class="player" aria-label="Game player">
+    <div id="screen">
+      <iframe id="game" title="Tenkaichi 3 Super Roster game" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+      <button id="exit" type="button" aria-label="Exit fullscreen" title="Exit fullscreen">X</button>
+    </div>
+    <div class="toolbar"><span class="hint">Click the game to play</span><div class="view-controls"><button id="cinematic" type="button" aria-controls="screen" aria-pressed="false">Cinematic</button><button id="fullscreen" type="button" aria-controls="screen">⛶ Fullscreen</button></div></div>
+  </section>
+  <p id="message" role="status"></p>
+  <footer>F1 · Settings &amp; controls <span aria-hidden="true">&nbsp; / &nbsp;</span> Saves stay in this browser.</footer>
+</main>
+<script>
+  const screen = document.getElementById('screen');
+  const game = document.getElementById('game');
+  const message = document.getElementById('message');
+  // Keep the selected File alive across the runtime's online-session reloads.
+  // This is only a file reference, not a copy of the ISO into memory or storage.
+  window.BT3LocalDisc = {
+    file: null,
+    remember(file) {
+      // Create the wrapper in this surviving window's realm. A File from the
+      // unloaded frame can otherwise return promises that never settle.
+      this.file = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+      return this.file;
+    },
+  };
+  // Preserve disc URLs, room credentials, and diagnostic options in the runtime.
+  game.src = 'game.html' + location.search + location.hash;
+  const active = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const focusGame = () => game.contentWindow.focus();
+  function setCinematic(on) {
+    screen.classList.toggle('expanded', on);
+    document.body.classList.toggle('expanded', on);
+    document.getElementById('cinematic').setAttribute('aria-pressed', String(on));
+    const label = on ? 'Exit cinematic mode' : 'Exit fullscreen';
+    document.getElementById('exit').setAttribute('aria-label', label);
+    document.getElementById('exit').title = label;
+  }
+  function enterCinematic() {
+    message.textContent = '';
+    setCinematic(true);
+    focusGame();
+  }
+  async function enterFullscreen() {
+    message.textContent = '';
+    try {
+      const request = screen.requestFullscreen || screen.webkitRequestFullscreen;
+      if (request) await request.call(screen);
+      else {
+        // iPhone browsers without the element Fullscreen API still get a full-window player.
+        setCinematic(true);
+      }
+      focusGame();
+    } catch (error) {
+      message.textContent = 'Fullscreen could not open. Try again or use your browser’s fullscreen command.';
+    }
+  }
+  async function exitFullscreen() {
+    try {
+      if (active()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      setCinematic(false);
+      focusGame();
+    } catch (error) { message.textContent = 'Use Escape to leave fullscreen.'; }
+  }
+  document.getElementById('cinematic').addEventListener('click', enterCinematic);
+  document.getElementById('fullscreen').addEventListener('click', enterFullscreen);
+  document.getElementById('exit').addEventListener('click', exitFullscreen);
+  for (const event of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(event, focusGame);
+  // Keyboard events from the same-origin runtime do not bubble through the iframe.
+  const escape = (event) => { if (event.key === 'Escape' && screen.classList.contains('expanded')) exitFullscreen(); };
+  document.addEventListener('keydown', escape);
+  game.addEventListener('load', () => { game.contentWindow.addEventListener('keydown', escape); });
+</script>
+</body>
+</html>

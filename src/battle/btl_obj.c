@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 /*
  * Battle objects (0x248F28..0x24BBE8): the table of animated models of a battle, their per-frame update, the
  * battle's light, the per-view draw lists, and the model resource slots the objects are built from.
@@ -453,7 +454,7 @@ void BtlObj_Setup(BtlObj *obj, s32 type, BtlResSlot *res, s32 id, s32 active) {
     BtlObjMdl_Create(type, obj, res);
     obj->active = active;
     obj->id = id;
-    obj->chara = (res->file[0].id - 0x590) / 10;
+    obj->chara = PortDlc_ModelCharacter(res->file[0].id);
     BtlObj_InitChains(obj);
 }
 
@@ -514,11 +515,11 @@ s32 BtlObj_RequestCharaModel(s32 side, s32 chara, s32 costume, s32 variant) {
     s32 model;
 
     if (variant != 0) {
-        model = chara * 10 + costume + 0x594;
+        model = PortDlc_Model(chara, costume, 1);
     } else {
-        model = chara * 10 + costume + 0x590;
+        model = PortDlc_Model(chara, costume, 0);
     }
-    return BtlRes_Request(1, model, chara * 10 + 0x598, chara * 10 + 0x599);
+    return BtlRes_Request(1, model, PortDlc_Animation(chara), PortDlc_Attacks(chara));
 }
 
 /* Returns the work block. */

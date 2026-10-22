@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "sys/adx.h"
 
@@ -303,6 +304,7 @@ void MapBgm_FadeOutStep(void) {
 void Voice_PlayCharaEx(s32 voice, s32 chara, s32 line, s32 vol, s32 pan) {
     s32 id;
 
+    chara = PortDlc_Voice(chara);
     if (gSaveData->flags & SAVE_FLAG_ALT_VOICE) {
         id = VOICE_CHARA_BASE_ALT + (chara * VOICE_CHARA_LINES + line);
     } else {

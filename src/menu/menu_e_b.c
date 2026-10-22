@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "menu/menu_e.h"
 #include "menu/menu_f.h"
@@ -270,7 +271,7 @@ void TeamSel_UpdateFaceLoad(void) {
                 gTeamSel->faceState = TEAMSEL_LOAD_IDLE;
             }
         } else {
-            File_Request(gTeamSel->side[gTeamSel->faceSide]->chara + TS_FACE_FILE,
+            File_Request(PortDlc_Portrait(gTeamSel->side[gTeamSel->faceSide]->chara),
                          gTeamSel->faceFile[gTeamSel->faceSide], 0x16800);
             gTeamSel->faceState = TEAMSEL_LOAD_READ;
         }
@@ -606,7 +607,8 @@ void TeamSel_Init(s32 section) {
     gTeamSel->nameText = MPACK_AT(gTeamSel->res, 43);
     gTeamSel->formText = MPACK_AT(gTeamSel->res, 44);
     gTeamSel->chipPack = (u32 *)MPACK_AT(gTeamSel->res, 45);
-    for (i = 0; i < TS_CELL_MAX; i++) {
+    /* Relocate the two added icon textures as well as the original roster. */
+    for (i = 0; i < (PortDlc_Enabled() ? 167 : TS_CELL_MAX); i++) {
         res = (MTexRes *)MPACK_AT(gTeamSel->chipPack, i + 1);
         Res_RelocateOffsets(&res, res, res);
     }
@@ -711,7 +713,7 @@ void TeamSel_Init(s32 section) {
         }
     }
     for (i = 0; i < TEAMSEL_SIDES; i++) {
-        File_LoadSync(gTeamSel->side[i]->chara + TS_FACE_FILE, gTeamSel->faceFile[i], 0x16800);
+        File_LoadSync(PortDlc_Portrait(gTeamSel->side[i]->chara), gTeamSel->faceFile[i], 0x16800);
         Sprite_Unpack(gTeamSel->faceFile[i], gTeamSel->faceRes[i], NULL);
         res = gTeamSel->faceRes[i];
         Res_RelocateOffsets(&res, res, res);
@@ -1026,7 +1028,7 @@ void TeamSel_Draw(void) {
             Flash_ClipSetFlags(flash, &ref, 0x80, (u8)gTeamSel->side[i]->mask);
             chara = gTeamSel->side[i]->chip[j / cols][j % cols];
             if (gTeamSel->battleType == 2) {
-                if (chara < TS_RANDOM) {
+                if (chara < TS_RANDOM || PortDlc_IsCharacter(chara)) {
                     cost = ChrTbl_GetCost(chara);
                 } else {
                     cost = 0;
@@ -1035,14 +1037,14 @@ void TeamSel_Draw(void) {
                 Flash_FindLabel(flash, name, name2, &ref);
                 if (gTeamSel->side[i]->cost + cost > gTeamSel->dpMax) {
                     Flash_ClipSetColor(flash, &ref, 0.4f);
-                } else if (chara < TS_RANDOM) {
+                } else if (chara < TS_RANDOM || PortDlc_IsCharacter(chara)) {
                     Flash_ClipSetColor(flash, &ref, TeamSel_IsCharaFree(i, chara) ? 1.0f : 0.4f);
                 } else {
                     Flash_ClipSetColor(flash, &ref, 1.0f);
                 }
                 sprintf(name2, "mc_dp_num_%03d", j);
                 Flash_FindLabel(flash, name, name2, &ref);
-                if (chara < TS_RANDOM) {
+                if (chara < TS_RANDOM || PortDlc_IsCharacter(chara)) {
                     uv.x0 = (cost % 4) * 0x20;
                     uv.x1 = uv.x0 + 0x20;
                     uv.y0 = (cost / 4) * 0x20;
@@ -1055,7 +1057,7 @@ void TeamSel_Draw(void) {
             } else {
                 sprintf(name2, "mc_chara_%03d", j);
                 Flash_FindLabel(flash, name, name2, &ref);
-                if (chara < TS_RANDOM) {
+                if (chara < TS_RANDOM || PortDlc_IsCharacter(chara)) {
                     Flash_ClipSetColor(flash, &ref, TeamSel_IsCharaFree(i, chara) ? 1.0f : 0.4f);
                 } else {
                     Flash_ClipSetColor(flash, &ref, 1.0f);

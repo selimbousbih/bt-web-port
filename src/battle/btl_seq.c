@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "battle/btl_seq.h"
 #include "battle/battle_setup.h"
@@ -815,7 +816,7 @@ s32 BtlSeqIntroTalk_Setup(BtlSeqTalkCtx *ctx) {
     BtlSeqObj *obj1 = BtlObj_Get(BattleSide_GetObjId(1));
     u8 *tbl1 = obj1->talkTbl;
 
-    if (tbl0 != NULL && tbl1 != NULL) {
+    if (!PortDlc_IsCharacter(obj0->chara) && !PortDlc_IsCharacter(obj1->chara) && tbl0 != NULL && tbl1 != NULL) {
         if (tbl0[obj1->chara * 4] != 0xFF) {
             if (tbl0[obj1->chara * 4 + 1] == 0) {
                 ctx->side[0] = 0;
@@ -976,7 +977,7 @@ s32 BtlSeqWinTalk_Setup(BtlSeqTalkCtx *ctx) {
     u8 *loseTbl = loseObj->talkTbl;
 
     if (BattleResult_IsPlayerWin()) {
-        if (winTbl == NULL || loseTbl == NULL || BtlCharApi_HasMemberUnk70(winner) || BtlCharApi_HasMemberUnk70(loser)) {
+        if (PortDlc_IsCharacter(winObj->chara) || PortDlc_IsCharacter(loseObj->chara) || winTbl == NULL || loseTbl == NULL || BtlCharApi_HasMemberUnk70(winner) || BtlCharApi_HasMemberUnk70(loser)) {
             ctx->side[0] = winner;
             if (BtlCharApi_HasMemberUnk70(winner)) {
                 ctx->chara[0] = 0x56;

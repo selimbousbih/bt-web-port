@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "menu/menu_d.h"
 #include "sys/common.h"
@@ -213,7 +214,7 @@ void CharSel_UpdateFaceLoad(void) {
         break;
     case CHARSEL_LOAD_REQUEST:
         File_CancelRequests();
-        File_Request(gCharSel->side[gCharSel->faceSide]->chara + CHARSEL_FACE_FILE,
+        File_Request(PortDlc_Portrait(gCharSel->side[gCharSel->faceSide]->chara),
                      gCharSel->faceFile[gCharSel->faceSide], 0x16800);
         gCharSel->faceState = CHARSEL_LOAD_READ;
         break;
@@ -525,7 +526,8 @@ void CharSel_Init(s32 section) {
     gCharSel->nameText = MPACK_AT(gCharSel->res, 43);
     gCharSel->formText = MPACK_AT(gCharSel->res, 44);
     gCharSel->chipPack = (u32 *)MPACK_AT(gCharSel->res, 45);
-    for (i = 0; i < MCHR_CELL_MAX; i++) {
+    /* Relocate the two added icon textures as well as the original roster. */
+    for (i = 0; i < (PortDlc_Enabled() ? 167 : MCHR_CELL_MAX); i++) {
         CS_RES(gCharSel->chipPack, i + 1);
     }
     gCharSel->stagePack = (u32 *)MPACK_AT(gCharSel->res, 46);
@@ -718,7 +720,7 @@ void CharSel_Init(s32 section) {
     gCharSel->stage->bgmPlaying = gCharSel->stage->bgm;
 
     for (i = 0; i < CHARSEL_SIDES; i++) {
-        File_LoadSync(gCharSel->side[i]->chara + CHARSEL_FACE_FILE, gCharSel->faceFile[i], 0x16800);
+        File_LoadSync(PortDlc_Portrait(gCharSel->side[i]->chara), gCharSel->faceFile[i], 0x16800);
         Sprite_Unpack(gCharSel->faceFile[i], gCharSel->faceRes[i], NULL);
         res = gCharSel->faceRes[i];
         Res_RelocateOffsets(&res, res, res);
@@ -1710,7 +1712,7 @@ void CharSel_Input(s32 *running) {
                         for (;;) {
                             n = Rand_Range(gCharSel->masterCount[CS_N]);
                             id = gCharSel->cells[CS_N][n].id;
-                            if (id < MCHR_RANDOM) {
+                            if (id < MCHR_RANDOM || PortDlc_IsCharacter(id)) {
                                 chara = id;
                                 break;
                             }

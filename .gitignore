@@ -41,3 +41,4 @@ port/build_release/
 /cloudflare/.dev.vars
 /demo/
 /cloudflare/wrangler.local.jsonc
+/mod

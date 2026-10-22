@@ -30,7 +30,7 @@ typedef struct PortFile {
 extern long Port_FileSize(const char *rel); /* plat_fcache.c */
 extern size_t Port_FileReadAt(const char *rel, long offset, void *buf, size_t bytes);
 
-static char sPartDir[8][64];
+static char sPartDir[8][64] = {"pzs3us0", "pzs3us1", "pzs3us2"};
 char gPortMoviePath[512]; /* host path of the movie file opened last */
 int Port_FilePath(int ptid, int flid, const char *fname, char *out, int size);
 extern void *Port_LowAlloc(size_t size); /* plat_mem.c */
@@ -163,7 +163,10 @@ int ADXF_GetPtStat(int ptid) {
 void *ADXF_OpenAfs(int ptid, int flid) {
     char rel[128];
 
-    snprintf(rel, sizeof(rel), "%s/%05d.bin", sPartDir[ptid & 7], flid);
+    /* Partition 2 is normally streamed audio and may not be mounted by ADXF yet.
+       Browser DLC assets use a reserved range in it, independent of mount order. */
+    const char *dir = ptid == 2 && flid >= 100000 && flid < 100052 ? "pzs3us2" : sPartDir[ptid & 7];
+    snprintf(rel, sizeof(rel), "%s/%05d.bin", dir, flid);
     return open_rel(rel);
 }
 

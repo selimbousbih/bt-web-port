@@ -33,13 +33,21 @@
   // ---------------------------------------------------------------------------------------------------------------
   const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
   const Link = {
-    ws: null, pc: null, dc: null, mode: '', queue: [], peerName: '', onState: null, keep: 0, gone: false,
+    ws: null, pc: null, dc: null, mode: '', queue: [], peerName: '', onState: null, keep: 0, roomKeep: 0, gone: false,
 
     open(room, role) {
       return new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl(room, role, 'session'));
         ws.binaryType = 'arraybuffer';
         this.ws = ws;
+        // Direct game traffic does not keep the signalling WebSocket active.
+        // Keep both transports alive, including during ISO loading and menus.
+        ws.onopen = () => {
+          clearInterval(this.roomKeep);
+          this.roomKeep = setInterval(() => {
+            if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'ping', ts: Date.now() }));
+          }, 15000);
+        };
         let settled = false, fallback = 0;
         const done = (mode) => {
           if (settled) return;
@@ -66,12 +74,24 @@
           } else if (m.t === 'relay') {
             relay();
           } else if (m.t === 'left' || m.t === 'bye') {
+            if (m.t === 'left' && this.mode === 'direct' && this.dc && this.dc.readyState === 'open') {
+              log('opponent room socket closed; direct game connection remains active');
+              return;
+            }
             this.gone = true;
             if (!settled) { settled = true; reject(new Error('The other player left.')); }
             else this.onState && this.onState('left');
           }
         };
-        ws.onclose = () => { if (!settled) { settled = true; reject(new Error('Could not reach the room.')); } };
+        ws.onclose = (e) => {
+          clearInterval(this.roomKeep);
+          log(`room socket closed (${e.code}: ${e.reason || 'no reason'})`);
+          if (!settled) { settled = true; reject(new Error('Could not reach the room.')); }
+          else if (!this.gone && this.mode === 'relay') {
+            this.gone = true;
+            this.onState && this.onState('lost');
+          }
+        };
         ws.onerror = () => {};
         this.ready = done;
       });
@@ -128,7 +148,10 @@
       return p.length;
     },
     close() {
+      this.gone = true;
+      this.onState = null;
       clearInterval(this.keep);
+      clearInterval(this.roomKeep);
       try { this.ws && this.ws.send(JSON.stringify({ t: 'bye' })); } catch (e) {}
       try { this.dc && this.dc.close(); } catch (e) {}
       try { this.pc && this.pc.close(); } catch (e) {}
@@ -165,6 +188,7 @@
     Link.onState = (what, name) => {
       if (what === 'peer') UI.connectText(`Connecting to ${name || 'your opponent'}...`);
       if (what === 'left') leave('The other player left the match.');
+      if (what === 'lost') leave('The room connection was lost. Please reconnect.');
     };
     try {
       // (an opponent who never comes, a phone locked right after a Quick Match paired it: not forever)
@@ -205,6 +229,7 @@
 
   // back to the game as it normally is (the session ended, or never began)
   function leave(why) {
+    Link.endWhy = why || Link.endWhy || '';
     Link.close();
     const u = new URL(location.href);
     for (const k of ['net', 'room', 'rules', 'vs']) u.searchParams.delete(k);

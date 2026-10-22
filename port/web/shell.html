@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<title>Tenkaichi 3 Web</title>
+<title>Tenkaichi 3 — Super Roster</title>
 <style>
   :root { --bg: #0b0c10; --panel: #15171e; --text: #e8e8ea; --muted: #9a9ca6; --accent: #f2a33a; --line: #2a2d38;
     --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
@@ -402,7 +402,16 @@
   // ---- the disc ----
   // A disc image as {size, readAt}: a File the user chose (read in place), or an address that answers HTTP range
   // requests (the test server's /disc.iso, port/web/serve.mjs).
-  const fileDisc = (f) => ({ size: f.size, readAt: async (o, n) => new Uint8Array(await f.slice(o, o + n).arrayBuffer()) });
+  // The outer player survives net.js navigating this frame into/out of a match.
+  // A standalone or cross-origin frame can still use the file picker normally.
+  const localDisc = (() => {
+    try { return window.parent !== window ? window.parent.BT3LocalDisc : null; }
+    catch (e) { return null; }
+  })();
+  const fileDisc = (f) => {
+    if (localDisc) f = localDisc.remember(f);
+    return { size: f.size, readAt: async (o, n) => new Uint8Array(await f.slice(o, o + n).arrayBuffer()) };
+  };
   // Reads of the network kinds: answers checked (status, length), a failed one tried again (a phone on mobile data
   // drops requests now and then), and while any read takes longer than a moment, the badge in the corner.
   let netBusy = 0, netTimer = 0, netBytes = 0;
@@ -528,28 +537,25 @@
   const go = (disc) => Module.ready ? start(disc) : (Module.pendingStart = () => start(disc), say('Loading the program…'));
   $('iso').addEventListener('change', (e) => { audioUnlock(); if (e.target.files[0]) go(fileDisc(e.target.files[0])); });
   $('pickLabel').addEventListener('click', audioUnlock);
-  // the server's own disc image (port/web/serve.mjs /disc.iso): straight into the game, no start screen. Sound
-  // starts at the first tap in the game (the resume listeners above). ?pick=1 shows the start screen anyway.
-  // Without a disc on the server (or with ?pick=1) the start screen asks for the player's own disc image.
-  const served = Q.get('disc') || '/disc.iso';
-  $('pickLabel').hidden = true;
-  $('start').classList.add('auto');
-  say('Loading…');
-  (Q.get('disc') ? httpDisc(served) : pieceDisc('/disc').catch(() => httpDisc(served))).then((disc) => {
-    if (!Q.get('pick')) { go(disc); return; }
+  // Restore a local disc before any remote probe. ?pick=1 is local-only: a slow
+  // server or tunnel must not hold up the picker or prefetch any ISO data.
+  if (localDisc && localDisc.file) {
+    go(fileDisc(localDisc.file));
+  } else if (Q.get('pick')) {
     $('start').classList.remove('auto');
-    const b = $('serverDisc');
     $('pickLabel').hidden = false;
-    b.hidden = false;
-    $('pickLabel').classList.add('alt');
     say('');
-    b.textContent = `Play (disc image on ${location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'this computer' : location.hostname})`;
-    b.addEventListener('click', () => { audioUnlock(); go(disc); }, { once: true });
-  }, (e) => {
-    $('start').classList.remove('auto');
-    $('pickLabel').hidden = false;
-    say(Q.get('disc') ? String(e.message || e) : '', !!Q.get('disc'));
-  });
+  } else {
+    const served = Q.get('disc') || '/disc.iso';
+    $('pickLabel').hidden = true;
+    $('start').classList.add('auto');
+    say('Loading…');
+    (Q.get('disc') ? httpDisc(served) : pieceDisc('/disc').catch(() => httpDisc(served))).then(go, (e) => {
+      $('start').classList.remove('auto');
+      $('pickLabel').hidden = false;
+      say(Q.get('disc') ? String(e.message || e) : '', !!Q.get('disc'));
+    });
+  }
 
   // the program itself
   if (typeof WebAssembly !== 'object') say('This browser cannot run WebAssembly.', true);

@@ -47,6 +47,27 @@ Module.webDiscIndex = async function () {
         entries += count;
         delete index[`disc/DATA/PZS3US${n}.AFS`]; // as extract_disc.py: the loose entries replace the archive
     }
+    // Optional browser-only resource overlay appended by mod/super-roster/build.py.
+    Module.webSsbDlc = false;
+    if (disc.size >= 24) {
+        const footer = await disc.readAt(disc.size - 24, 24);
+        if (String.fromCharCode(...footer.subarray(0, 8)) === 'BT3SUPER') {
+            const view = new DataView(footer.buffer, footer.byteOffset, footer.byteLength);
+            const offset = Number(view.getBigUint64(8, true));
+            const length = Number(view.getBigUint64(16, true));
+            if (length > 4 * 1024 * 1024 || offset + length !== disc.size - 24)
+                throw new Error('Invalid Super roster manifest');
+            const manifest = JSON.parse(new TextDecoder().decode(await disc.readAt(offset, length)));
+            if (manifest.version !== 1) throw new Error('Unsupported Super roster version');
+            for (const [path, span] of Object.entries(manifest.entries)) {
+                if (!/^pzs3us[012]\/\d+\.bin$/.test(path) || span.length !== 2 ||
+                    !span.every(Number.isSafeInteger) || span[0] < 0 || span[1] < 0 || span[0] + span[1] > offset)
+                    throw new Error('Invalid Super roster resource');
+                index[path] = span;
+            }
+            Module.webSuperRoster = true;
+        }
+    }
     Module.webIndex = index;
     return entries;
 };

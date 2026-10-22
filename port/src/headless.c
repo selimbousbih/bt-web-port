@@ -108,7 +108,7 @@ int __wrap_Progress_Main(int arg) {
             /* An online session (gs/net.c) goes straight to the versus mode's character select, with the game's
                default save and everything in it unlocked: the same on both sides. (The overlay's first-run part, the
                logos and the memory card check, still runs first; without picture: Port_NetWarp.) */
-            if (Port_NetSession() && !sNetEntered && gProgress != NULL && gSaveData != NULL) {
+            if ((Port_NetSession() || getenv("SUPER_SELECT")) && !sNetEntered && gProgress != NULL && gSaveData != NULL) {
                 sNetEntered = 1;
                 /* Mode 39 is the versus mode's character select. The versus menu in front of it (mode 38) only
                    leaves three choices behind, in this same record (DuelProgress, include/menu/menu_g.h): who
@@ -124,7 +124,7 @@ int __wrap_Progress_Main(int arg) {
                     int type, dp, time;
                     Port_NetRules(&type, &dp, &time);
                     gProgress->mode = type != 0 ? 40 : 39;
-                    *(int *)((char *)gProgress + 0x620) = 1;
+                    *(int *)((char *)gProgress + 0x620) = getenv("SUPER_SELECT") ? 0 : 1;
                     *(int *)((char *)gProgress + 0x624) = type;
                     *(int *)((char *)gProgress + 0x630) = dp;
                     Save_UnlockAll(gSaveData);
@@ -167,9 +167,27 @@ int __wrap_Progress_Main(int arg) {
            battle, for looking at one character's model without going through the menus */
         if (getenv("BT3_CHARA") != NULL) {
             extern struct { int chara, costume, variant; } GAME_PTR BattleSide_GetMember(int side, int index);
-            BattleSide_GetMember(0, 0)->chara = atoi(getenv("BT3_CHARA"));
+            extern void BattleSetup_Finish(void);
+            int testSide = getenv("BT3_TECH_SIDE") ? atoi(getenv("BT3_TECH_SIDE")) & 1 : 0;
+            BattleSide_GetMember(testSide, 0)->chara = atoi(getenv("BT3_CHARA"));
             BattleSide_GetMember(0, 0)->costume = getenv("BT3_COSTUME") != NULL ? atoi(getenv("BT3_COSTUME")) : 0;
             BattleSide_GetMember(0, 0)->variant = getenv("BT3_VARIANT") != NULL;
+            if (getenv("BT3_TECH_TARGET") != NULL) {
+                *(int *)((char *)BattleSide_GetMember(0, 0) + 12) = -1;
+                *(int *)((char *)BattleSide_GetMember(1, 0) + 12) = -1;
+            }
+            if (getenv("BT3_TECH_KO")) {
+                *(float *)((char *)BattleSide_GetMember(testSide ^ 1, 0) + 16) = 1.0f;
+            }
+            if (getenv("BT3_TECH_PLAYERS")) {
+                extern void *Battle_GetSetup(void);
+                *(int *)((char *)Battle_GetSetup() + 8) = 4;
+                *(int *)((char *)Battle_GetSetup() + 0x24) = 1;
+                *(int *)((char *)BattleSide_GetMember(0, 0) + 0x204) = 0;
+                *(int *)((char *)BattleSide_GetMember(1, 0) + 0x204) = 0;
+            }
+            /* Refresh the start/current forms after overriding the already finalized demo setup. */
+            BattleSetup_Finish();
             printf("bt3: side 0 is character %d, costume %d\n", BattleSide_GetMember(0, 0)->chara, BattleSide_GetMember(0, 0)->costume);
         }
     }
@@ -406,6 +424,66 @@ void Port_Trace(unsigned vblanks) {
             fflush(stdout);
             last = gBtlSeq->state;
         }
+    }
+    /* Opt-in bounded attack reproduction for imported fighter resources. */
+    if (getenv("BT3_TECH_TEST") != NULL && sBattles && gBtlSeq && gBtlSeq->state >= 2) {
+        extern void *BtlChar_FindByObjId(int);
+        extern int BtlCtrl_UseTechnique(int, int);
+        extern int BtlAct_GetCurrent(void *);
+        extern int BtlChar_IsFree(void *);
+        extern int BtlChar_TestFlag(void *, unsigned);
+        extern int BtlChars_IsTimeStopped(void);
+        extern int BtlChar_IsFrozen(void *);
+        extern float BtlAnim_GetFrame(void *);
+        extern void BtlChar_ClearFlag(void *, unsigned);
+        static unsigned started;
+        static int released;
+        int side = getenv("BT3_TECH_SIDE") ? atoi(getenv("BT3_TECH_SIDE")) & 1 : 0;
+        void *fighter = BtlChar_FindByObjId(side);
+        int kind = atoi(getenv("BT3_TECH_TEST"));
+        if (!started && BtlSeq_GetClock()[0] >= 240 && BtlAct_GetCurrent(fighter) == 0xB) {
+            started = vblanks;
+            if (getenv("BT3_TECH_TARGET") != NULL) {
+                extern void BtlCtrl_SetPos(int, float *);
+                extern int BtlCtrl_ForceReaction(int, unsigned);
+                float target[4] __attribute__((aligned(16)));
+                BtlCharApi_GetPos(side, target);
+                target[2] += 1000.0f;
+                BtlCtrl_SetPos(side ^ 1, target);
+                BtlCtrl_ForceReaction(side ^ 1, 0);
+            }
+            BtlCtrl_UseTechnique(side, kind);
+            printf("attack-test: request %d at %u\n", kind, vblanks);
+        }
+        if (started && !released && vblanks - started >= 20) {
+            BtlChar_ClearFlag(fighter, kind + 0x120);
+            BtlChar_ClearFlag(fighter, 0x11E);
+            /* Let the attack clear its own 0x11F input lock. */
+            released = 1;
+        }
+        if (started && vblanks-started >= 1000 && getenv("BT3_TECH_PLAYERS")) {
+            int sideIndex;
+            for (sideIndex=0; sideIndex<2; sideIndex++) {
+                char *c = BtlChar_FindByObjId(sideIndex);
+                *(int *)(c+0x1278) = 1;
+                *(unsigned *)(c+0x127C) = 0x40;
+                *(float *)(c+0x1280) = 0.0f;
+                *(float *)(c+0x1284) = 1.0f;
+            }
+        }
+        if (started && (vblanks - started) % 60 == 0) {
+            void *other = BtlChar_FindByObjId(side ^ 1);
+            printf("attack-test: +%u clock=%d actions=%x,%x anim=%x frame=%f hp=%d,%d free=%d,%d frozen=%d,%d\n",
+                vblanks-started, BtlSeq_GetClock()[0], BtlAct_GetCurrent(fighter), BtlAct_GetCurrent(other),
+                *(int *)((char *)fighter + 0x974), (double)BtlAnim_GetFrame(fighter), BtlCharApi_GetHp(0), BtlCharApi_GetHp(1),
+                BtlChar_IsFree(fighter), BtlChar_IsFree(other), BtlChar_IsFrozen(fighter), BtlChar_IsFrozen(other));
+            printf("attack-input: stop=%d locks=%d%d%d%d,%d%d%d%d held=%x,%x\n", BtlChars_IsTimeStopped(),
+                BtlChar_TestFlag(fighter,0x11E), BtlChar_TestFlag(fighter,0x11F), BtlChar_TestFlag(fighter,0xB1), BtlChar_TestFlag(fighter,0x136),
+                BtlChar_TestFlag(other,0x11E), BtlChar_TestFlag(other,0x11F), BtlChar_TestFlag(other,0xB1), BtlChar_TestFlag(other,0x136),
+                *(unsigned *)((char *)fighter+0x73C), *(unsigned *)((char *)other+0x73C));
+            fflush(stdout);
+        }
+        if (started && vblanks-started >= 1800) exit(0);
     }
     if (every <= 0 || vblanks % (unsigned)every != 0 || sBattles == 0 || gBtlSeq == NULL || gBtlSeq->state < 2) {
         return;

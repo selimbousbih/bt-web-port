@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "battle/btl_char_fx.h"
 
@@ -645,7 +646,7 @@ void BtlPartner_HandleEvents(FxObj *obj, FxChr *chr) {
         }
     }
     if (kind >= 0) {
-        BtlCharSnd_RequestAt(&pos, 7, sound + obj->chara * 100 + kind, 200.0f, 1500.0f);
+        BtlCharSnd_RequestAt(&pos, 7, sound + PortDlc_Voice(obj->chara) * 100 + kind, 200.0f, 1500.0f);
     }
     if (mask >= 0) {
         BtlObj_SetSubState(obj, 2, mask);

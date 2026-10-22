@@ -1296,7 +1296,12 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     tChain = now_ns();
     if (sThreaded) {
         render_wait(); /* the previous list must be finished before this one starts (the PS2's sceGsSyncPath) */
-    } else {
+    }
+    { /* Sample battle state on its owning thread before the renderer consumes this frame. */
+        extern void Port_CounterHintSample(void);
+        Port_CounterHintSample();
+    }
+    if (!sThreaded) {
         run_chain(tadr, tte);
     }
     /* The frame's work ends here. Time it (BT3_GS_VERBOSE), then keep 30 frames per second. */

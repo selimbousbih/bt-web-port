@@ -1,3 +1,4 @@
+#include "port_dlc.h"
 #include "common.h"
 #include "battle/battle_work.h"
 #include "battle/battle_setup.h"
@@ -329,9 +330,9 @@ s32 BtlLoad_StepObject(BtlJob *job) {
         id = job->chara + BTL_FILE_OBJECT;
         if (job->chara < 0x100) {
             if (job->unk1C != 0) {
-                id = job->chara * 10 + job->animChara + (BTL_FILE_CHARA + 4);
+                id = PortDlc_Model(job->chara, job->animChara, 1);
             } else {
-                id = job->chara * 10 + job->animChara + BTL_FILE_CHARA;
+                id = PortDlc_Model(job->chara, job->animChara, 0);
             }
         }
         gBtlLoadHandle = BtlRes_Request(0, id, -1, -1);
@@ -398,14 +399,14 @@ s32 BtlLoad_StepChara(BtlJob *job) {
     switch (job->state) {
     case 0:
         if (job->variant != 0) {
-            model = job->chara * 10 + job->costume + (BTL_FILE_CHARA + 4);
+            model = PortDlc_Model(job->chara, job->costume, 1);
         } else {
-            model = job->chara * 10 + job->costume + BTL_FILE_CHARA;
+            model = PortDlc_Model(job->chara, job->costume, 0);
         }
         if (job->modelOnly == 0) {
-            file8 = job->animChara * 10 + (BTL_FILE_CHARA + 8);
-            file9 = job->unk1C * 10 + (BTL_FILE_CHARA + 9);
-            voice = job->voiceChara + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE);
+            file8 = PortDlc_Animation(job->animChara);
+            file9 = PortDlc_Attacks(job->unk1C);
+            voice = PortDlc_Voice(job->voiceChara) + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE);
             BtlRes_Reload(BattleSide_GetModelSlot(job->side), model, file8, file9);
             res->bank = File_Request3(voice, res->bank, res->bankSize);
             if (!BtlCtrl_IsSwitching(job->side)) {
@@ -416,7 +417,7 @@ s32 BtlLoad_StepChara(BtlJob *job) {
                     member = BtlSide_GetActiveMember(job->side);
                 }
                 next = BattleSide_GetMember(job->side, member);
-                next->buf[1] = File_Request3(job->chara * 2 + job->side + BTL_FILE_CHARA_DATA, next->buf[1], BTL_MEMBER_BUF_SIZE);
+                next->buf[1] = File_Request3(PortDlc_Hud(job->chara, job->side), next->buf[1], BTL_MEMBER_BUF_SIZE);
             }
         } else {
             BtlRes_Reload(BattleSide_GetModelSlot(job->side), model, -1, -1);
@@ -500,8 +501,8 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
     case 0:
         res->sndCommon = File_Request3(BTL_FILE_SND_COMMON, NULL, 0);
         res->sndStage = File_Request3(BTL_STAGE_BANK(Battle_GetStartStage()), NULL, 0);
-        res->sndChara[0] = File_Request3(BattleSide_GetStartChara(0) + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE), NULL, 0);
-        res->sndChara[1] = File_Request3(BattleSide_GetStartChara(1) + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE), NULL, 0);
+        res->sndChara[0] = File_Request3(PortDlc_Voice(BattleSide_GetStartChara(0)) + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE), NULL, 0);
+        res->sndChara[1] = File_Request3(PortDlc_Voice(BattleSide_GetStartChara(1)) + ((gSaveData->flags & SAVE_FLAG_VOICE) ? BTL_FILE_VOICE_ALT : BTL_FILE_VOICE), NULL, 0);
         job->state++;
         return 0;
     case 1:
@@ -590,7 +591,7 @@ s32 BtlLoad_StepInitial(BtlJob *job) {
         for (side = 0; side < 2; side++) {
             for (i = 0; (u32)i < (u32)BattleSide_GetMemberCount(side); i++) {
                 m = BattleSide_GetMember(side, i);
-                m->buf[0] = File_Request3(m->chara * 2 + side + BTL_FILE_CHARA_DATA, m->buf[0], BTL_MEMBER_BUF_SIZE);
+                m->buf[0] = File_Request3(PortDlc_Hud(m->chara, side), m->buf[0], BTL_MEMBER_BUF_SIZE);
             }
         }
         res->unk8 = File_Request3(gProgress->unk0[0] + 6, NULL, 0);
@@ -1993,5 +1994,5 @@ void BattleSide_SetMemberItems(s32 side, s32 idx, BattleItemSet *items) {
 s32 BattleSide_IsCharaUsable(s32 side, s32 chara) {
     u64 *bits = Side(side)->charaBits.bits;
 
-    return (bits[chara / 64] >> (chara % 64)) & 1;
+    return PortDlc_IsCharacter(chara) || ((bits[chara / 64] >> (chara % 64)) & 1);
 }
