@@ -54,6 +54,30 @@ node port/web/serve.mjs 4500 <your disc image> --lan
 prints an address with a secret key (`?k=...`). Open it on the phone; requests without the key are refused.
 Never forward this port to the internet.
 
+### Leaderboard and game results
+
+The player page shows a leaderboard and the latest 20 games below the game. Set **Player 1 / online username**
+and **Player 2** there before starting a local match; the first name is also used in Dragon Net Battle.
+Names are remembered in this browser. An active match keeps the names it started with.
+
+The local Node server appends every reported result to **`saves/game-results.jsonl`**: one JSON record per
+game, with both usernames, CPU flags, winning side (0 or 1), outcome, reason, game mode, frame count and server
+timestamp. It rebuilds the leaderboard from that file on startup. The file stays on the server computer,
+outside the web assets, and is ignored by git. Set `BT3_RESULTS_FILE=/absolute/path/results.jsonl` to choose
+another location. Back up this file to keep the complete history; the UI displays only the latest 20 records.
+
+Wins rank first, then win rate, then username. Names differing only in case share a standing. Human results
+against CPUs count; CPUs have no standing. Draws count as games played. Aborts and detected online disconnects
+are recorded without awarding wins or losses. Attract demos, replay playback and practice are excluded.
+Online games are reported by the host once, with the host as side 0 even when the joiner's HUD is swapped.
+Unsent results retry automatically and survive reloads when browser storage is available.
+
+This works with both `serve.mjs` and the local server behind `play-online.sh`'s tunnel. A separately deployed
+Cloudflare Worker has no access to the computer's results file and does not provide this local leaderboard.
+
+Regression checks: `node --test port/tests/game-results.mjs`, `node port/tests/game-results-client.mjs` and
+`node port/tests/game-results-browser.mjs` (the last requires Playwright and Chromium).
+
 ## Your own copy on Cloudflare (optional)
 
 `cloudflare/` deploys the page and your disc image to **your own** Cloudflare account as a Worker, behind a

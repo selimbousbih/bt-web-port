@@ -50,7 +50,7 @@ assert.equal(match.probes.length, 0);
 let leaveURL;
 const leaveStart = net.indexOf('  function leave(why)');
 vm.runInNewContext(net.slice(leaveStart, net.indexOf('\n  // ---', leaveStart)) + "\nleave('The room connection was lost. Please reconnect.');", {
-  URL, Link: {close() {}}, location: {href: matchURL.href, replace: u => {leaveURL = new URL(u);}},
+  URL, window: {}, Link: {close() {}}, location: {href: matchURL.href, replace: u => {leaveURL = new URL(u);}},
 });
 assert.ok(leaveURL.searchParams.get('netmsg'));
 const menu = frame(leaveURL.search);

@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 SRC=../port/build/web
 ISO=../disc/bt3-usa.iso
 PIECE=$((1024 * 1024))
-ALLOW="index.html net.js net.css bt3-jspi.js bt3-jspi.wasm bt3-async.js bt3-async.wasm icon-180.png icon-192.png icon-512.png manifest.webmanifest"
+ALLOW="index.html game.html net.js net.css results.js bt3-jspi.js bt3-jspi.wasm bt3-async.js bt3-async.wasm icon-180.png icon-192.png icon-512.png manifest.webmanifest"
 mkdir -p public/disc
 find public -maxdepth 1 -type f -delete
 for f in $ALLOW; do
@@ -32,7 +32,7 @@ done
 printf '{"size": %d, "piece": %d}\n' "$size" "$PIECE" > public/disc/index.json
 n=$(ls public | wc -l | tr -d ' ')
 pieces=$(ls public/disc | grep -c '\.bin$' | tr -d ' ')
-[ "$n" = 13 ] || { echo "public/ has $n entries, expected 12 files and disc/"; exit 1; }
+[ "$n" = 15 ] || { echo "public/ has $n entries, expected 14 files and disc/"; exit 1; }
 [ "$pieces" = "$count" ] || { echo "public/disc has $pieces pieces, expected $count"; exit 1; }
 if find public | grep -qiE '\.iso$|\.key$|telemetry|\.env|_node'; then echo "refusing: unexpected file in public/"; exit 1; fi
 echo "public/: $(du -sh public | cut -f1), $count disc pieces"

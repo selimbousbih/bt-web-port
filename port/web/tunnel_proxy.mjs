@@ -1,6 +1,6 @@
 // Expose only game routes; keep Wrangler development/admin endpoints local.
 import http from 'node:http';
-const allowed = req => /^\/(?:$|(?:index|game)\.html$|net\.(?:js|css)$|bt3-(?:jspi|async)\.(?:js|wasm)$|icon-\d+\.png$|manifest\.webmanifest$|disc\.iso$|disc\/index\.json$|telemetry$|net\/(?:ws|queue|stat|log)$)/.test(new URL(req.url,'http://local').pathname);
+const allowed = req => /^\/(?:$|(?:index|game)\.html$|(?:net|results)\.(?:js|css)$|bt3-(?:jspi|async)\.(?:js|wasm)$|icon-\d+\.png$|manifest\.webmanifest$|disc\.iso$|disc\/index\.json$|telemetry$|api\/(?:results|leaderboard)$|net\/(?:ws|queue|stat|log)$)/.test(new URL(req.url,'http://local').pathname);
 const server = http.createServer((req,res) => {
   if (!allowed(req)) { res.writeHead(404).end(); return; }
   const upstream=http.request({hostname:'127.0.0.1',port:4701,path:req.url,method:req.method,headers:req.headers},r=>{res.writeHead(r.statusCode,r.headers);r.pipe(res);});

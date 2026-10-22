@@ -68,7 +68,7 @@ def main():
     if target != "node":
         (OUT / "index.html").write_text((WEB / "player.html").read_text())
         (OUT / "game.html").write_text((WEB / "shell.html").read_text())
-        for f in ("net.js", "net.css"):  # online play's screens and connection (Dragon Net Battle)
+        for f in ("net.js", "net.css", "results.js"):  # online play and file-backed leaderboard
             shutil.copy(WEB / f, OUT / f)
         subprocess.run([sys.executable, str(WEB / "make_icons.py")], check=True)
     errs = [l for l in r.stderr.splitlines() if "error" in l or "mismatch" in l]

@@ -143,6 +143,9 @@ s32 Battle_Restart(void) {
     BtlChar_ResetAll();
     Fade_ResetAll();
     Fade_Start(0, 1, 1.0f);
+#ifdef __EMSCRIPTEN__
+    { extern void Web_ResultsStart(void); Web_ResultsStart(); }
+#endif
     return 0;
 }
 

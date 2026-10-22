@@ -36,6 +36,27 @@
   footer { margin-top: 16px; }
   #message { color: #ffb4a8; margin: 8px 0 0; }
   #message:empty { display: none; }
+  .standings { margin-top: 28px; border: 1px solid #333743; border-radius: 14px; padding: 20px; background: #15171e; }
+  .standings h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
+  .standings h3 { margin: 24px 0 8px; font-size: 16px; }
+  .standings p { margin: 6px 0 14px; }
+  .standings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #refresh-results { background: #262a35; color: #e8e8ea; border-color: #494d59; }
+  #player-names { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin: 20px 0 8px; }
+  #player-names label { display: grid; gap: 5px; color: #9a9ca6; font-size: 13px; flex: 1 1 180px; }
+  #player-names input { min-width: 0; width: 100%; border: 1px solid #494d59; border-radius: 8px; padding: 10px 12px; background: #0b0c10; color: #e8e8ea; font: 15px system-ui, sans-serif; }
+  #player-names input:focus-visible { outline: 2px solid #f2a33a; outline-offset: 2px; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 12px 10px; text-align: right; border-bottom: 1px solid #2a2d38; white-space: nowrap; }
+  th { color: #9a9ca6; font-size: 12px; font-weight: 600; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; width: 100%; }
+  td:nth-child(3) { color: #f2a33a; font-weight: 700; }
+  #leaderboard-empty, #history-empty { padding: 16px 0; }
+  #result-history { margin: 0; padding: 0; list-style: none; }
+  #result-history li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 12px 0; border-bottom: 1px solid #2a2d38; overflow-wrap: anywhere; }
+  #results-status { color: #ffb4a8; }
+  #results-status:empty, #names-status:empty { display: none; }
   @media (max-width: 600px) {
     main { padding: 16px 10px; }
     header .hint { display: none; }
@@ -57,8 +78,26 @@
     <div class="toolbar"><span class="hint">Click the game to play</span><div class="view-controls"><button id="cinematic" type="button" aria-controls="screen" aria-pressed="false">Cinematic</button><button id="fullscreen" type="button" aria-controls="screen">⛶ Fullscreen</button></div></div>
   </section>
   <p id="message" role="status"></p>
+  <section class="standings" aria-labelledby="leaderboard-title">
+    <div class="standings-head"><div><div class="edition">Battle records</div><h2 id="leaderboard-title">Leaderboard</h2></div><button id="refresh-results" type="button">Refresh</button></div>
+    <p class="hint">Ranked by wins, then win rate. CPU opponents and unfinished games do not enter the standings.</p>
+    <form id="player-names">
+      <label for="player-one">Player 1 / online username<input id="player-one" name="player-one" maxlength="16" required autocomplete="nickname"></label>
+      <label for="player-two">Player 2 · local matches<input id="player-two" name="player-two" maxlength="16" required autocomplete="off"></label>
+      <button type="submit">Save names</button>
+    </form>
+    <p id="names-status" class="hint" role="status"></p>
+    <div class="table-scroll"><table aria-label="Player standings"><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Wins</th><th scope="col">Losses</th><th scope="col">Draws</th><th scope="col">Played</th><th scope="col">Win rate</th></tr></thead><tbody id="leaderboard-rows"></tbody></table></div>
+    <p id="leaderboard-empty" class="hint">No standings yet. Finish a match to join the leaderboard.</p>
+    <h3>Recent games</h3>
+    <p id="results-total" class="hint">Loading results…</p>
+    <ul id="result-history" aria-label="Recent game results"></ul>
+    <p id="history-empty" class="hint">Your latest 20 games will appear here.</p>
+    <p id="results-status" role="status"></p>
+  </section>
   <footer>F1 · Settings &amp; controls <span aria-hidden="true">&nbsp; / &nbsp;</span> Saves stay in this browser.</footer>
 </main>
+<script src="results.js"></script>
 <script>
   const screen = document.getElementById('screen');
   const game = document.getElementById('game');

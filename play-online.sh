@@ -8,7 +8,7 @@ for cmd in node npx cloudflared curl; do
 done
 ISO="${1:-game-super.iso}"
 [ -f "$ISO" ] || { echo "Missing game image: $ISO" >&2; exit 1; }
-for file in index.html game.html net.js net.css bt3-jspi.js bt3-jspi.wasm bt3-async.js bt3-async.wasm; do
+for file in index.html game.html net.js net.css results.js bt3-jspi.js bt3-jspi.wasm bt3-async.js bt3-async.wasm; do
   [ -f "port/build/web/$file" ] || { echo "Missing browser build: $file" >&2; exit 1; }
 done
 # Check all ports before starting anything, so an existing session is never replaced.

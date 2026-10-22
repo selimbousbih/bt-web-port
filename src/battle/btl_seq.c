@@ -1353,8 +1353,11 @@ s32 BtlSeqFight_Update(BtlSeqWaitCtx *ctx) {
     return 3;
 }
 
-/* State 3 exit: nothing. */
+/* State 3 exit: the browser records the result before the result menu can change it. */
 s32 BtlSeqFight_Exit(BtlSeqWaitCtx *ctx) {
+#ifdef __EMSCRIPTEN__
+    { extern void Web_ResultsFinish(void); Web_ResultsFinish(); }
+#endif
     return 1;
 }
 

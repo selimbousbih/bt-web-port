@@ -11,10 +11,13 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createResultStore, handleResults } from './results.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../build/web');
 const port = +(process.argv[2] || 4500), iso = process.argv[3];
 const TELEMETRY = path.resolve(ROOT, '../telemetry.log');
+const RESULTS_FILE = process.env.BT3_RESULTS_FILE || path.resolve(ROOT, '../../../saves/game-results.jsonl');
+const results = createResultStore(RESULTS_FILE);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json',
                 '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.css': 'text/css' };
 const lan = process.argv.includes('--lan');
@@ -33,6 +36,7 @@ http.createServer((req, res) => {
             res.writeHead(403).end('forbidden'); return;
         }
     }
+    if (handleResults(req, res, url, results)) return;
     // test telemetry: the page (?telemetry=1) posts its log and frame statistics here; appended to port/build/telemetry.log
     if (url.pathname === '/telemetry' && req.method === 'POST') {
         let body = '';
@@ -63,6 +67,7 @@ http.createServer((req, res) => {
     }
 }).listen(port, lan ? '0.0.0.0' : '127.0.0.1', () => {
     console.log(`http://127.0.0.1:${port}/  (disc image: ${iso || 'none'})`);
+    console.log(`Game results: ${RESULTS_FILE}`);
     if (lan) {
         for (const nets of Object.values(os.networkInterfaces())) for (const n of nets) {
             if (n.family === 'IPv4' && !n.internal) console.log(`on this Wi-Fi: http://${n.address}:${port}/?k=${key}`);

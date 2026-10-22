@@ -229,6 +229,7 @@
 
   // back to the game as it normally is (the session ended, or never began)
   function leave(why) {
+    if (window.BT3Results) window.BT3Results.disconnect();
     Link.endWhy = why || Link.endWhy || '';
     Link.close();
     const u = new URL(location.href);
